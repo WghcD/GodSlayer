@@ -1,0 +1,21 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.godslayer.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "refmap": "mixins.godslayer.refmap.json",
+  "mixins": [
+    "MixinLivingEntity",
+    "MixinEntity",
+    "MixinEntityKilled",
+    "MixinServerPlayer"
+  ],
+  "client": [
+    "MixinMinecraftClient",
+    "MixinEntityRenderer"
+  ],
+  "server": [],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

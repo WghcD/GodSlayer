@@ -1,0 +1,26 @@
+modLoader = "javafml"
+loaderVersion = "[47,)"
+license = "MIT"
+
+[[mods]]
+modId = "godslayer"
+version = "1.0.0"
+displayName = "God Slayer Sword"
+logoFile = "godslayer.png"
+credits = ""
+authors = "bilbili.com-> Wgh_Accept"
+description = "Ultimate protection and massacre sword with Native-level defense."
+
+[[dependencies.godslayer]]
+modId = "forge"
+mandatory = true
+versionRange = "[47,)"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.godslayer]]
+modId = "minecraft"
+mandatory = true
+versionRange = "[1.20.1,1.21)"
+ordering = "NONE"
+side = "BOTH"

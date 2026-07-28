@@ -1,0 +1,107 @@
+plugins {
+    id 'eclipse'
+    id 'idea'
+    id 'maven-publish'
+    id 'net.minecraftforge.gradle' version '[6.0,6.2)'
+    id 'org.spongepowered.mixin' version '0.7.+'
+}
+
+group = 'com.godslayer'
+version = '1.0.0'
+
+java {
+    archivesBaseName = 'godslayer'
+    toolchain.languageVersion = JavaLanguageVersion.of(17)
+}
+
+repositories {
+    maven { url 'https://mirrors.cloud.tencent.com/nexus/repository/maven-public/' }
+    maven { url 'https://lss233.littleservice.cn/repositories/minecraft/' }
+    maven { url 'https://maven.minecraftforge.net/' }
+    mavenCentral()
+}
+
+minecraft {
+    mappings channel: 'official', version: '1.20.1'
+
+    runs {
+        client {
+            workingDirectory project.file('run')
+            property 'forge.logging.mojang_level', 'debug'
+            property 'mixin.env.remapRefMap', 'true'
+            property 'mixin.env.refMapRemappingFile', "${projectDir}/build/createSrgToMcp/output.srg"
+            arg '-mixin.config=mixins.godslayer.json'
+
+            property 'forge.enabledGameTestNamespaces', 'godslayer'
+            mods {
+                godslayer {
+                    source sourceSets.main
+                }
+            }
+        }
+
+        server {
+            workingDirectory project.file('run')
+            property 'forge.logging.mojang_level', 'debug'
+            property 'mixin.env.remapRefMap', 'true'
+            property 'mixin.env.refMapRemappingFile', "${projectDir}/build/createSrgToMcp/output.srg"
+            arg '-mixin.config=mixins.godslayer.json'
+
+            property 'forge.enabledGameTestNamespaces', 'godslayer'
+            mods {
+                godslayer {
+                    source sourceSets.main
+                }
+            }
+        }
+    }
+}
+
+mixin {
+    add sourceSets.main, 'mixins.godslayer.refmap.json'
+    config 'mixins.godslayer.json'
+}
+
+
+
+dependencies {
+    minecraft 'net.minecraftforge:forge:1.20.1-47.4.10'
+    implementation 'org.spongepowered:mixin:0.8.5'
+    implementation 'org.ow2.asm:asm:9.5'
+    implementation 'org.ow2.asm:asm-tree:9.5'
+    implementation 'net.minecraftforge:forgespi:6.0.0'
+    annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
+    implementation 'net.java.dev.jna:jna:5.14.0'
+}
+
+
+
+task compileNative(type: Exec) {
+    group = 'build'
+    commandLine 'cmd', '/c', 'F:\\MinecraftDevelopement\\forge-1.20.1-47.4.10-mdk\\src\\main\\cpp\\compile.bat'
+    workingDir project.projectDir
+}
+
+compileJava.dependsOn compileNative
+
+jar {
+    manifest {
+        attributes([
+                'Specification-Title'     : 'God Slayer Sword',
+                'Specification-Vendor'    : 'GodSlayerTeam',
+                'Specification-Version'   : '1',
+                'Implementation-Title'    : 'God Slayer Sword',
+                'Implementation-Version'  : project.version,
+                'Implementation-Vendor'   : 'GodSlayerTeam',
+                'MixinConfigs'            : 'mixins.godslayer.json',
+        ])
+    }
+
+    // 包含 Native 库（如果有编译产出）
+   from('src/main/cpp/build') {
+        include '*.dll', '*.so', '*.dylib'
+        into 'natives'
+    }
+}
+
+jar.finalizedBy('reobfJar')

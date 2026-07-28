@@ -1,0 +1,5 @@
+EXPORTS
+    Java_com_godslayer_GodSlayerNative_nativeMassacre
+    Java_com_godslayer_GodSlayerNative_nativeKillEntity
+    Java_com_godslayer_GodSlayerNative_nativeDisableThreats
+    Java_com_godslayer_GodSlayerNative_nativeTickGuard
