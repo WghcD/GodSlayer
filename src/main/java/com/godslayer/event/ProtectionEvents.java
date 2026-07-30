@@ -95,7 +95,7 @@ public class ProtectionEvents {
     public static void onAttackEntity(AttackEntityEvent event) {
         Player attacker = event.getEntity();
         if (!isHoldingGodSlayer(attacker)) return;
-        if (NativeGuard.BYPASS) return;
+
 
         Entity target = event.getTarget();
         if (target == null) return;
@@ -124,6 +124,8 @@ public class ProtectionEvents {
         //饱食和饱和
         player.getFoodData().setFoodLevel(20);
         player.getFoodData().setSaturation(5.0F);
+
+
 
         player.removeAllEffects();
 

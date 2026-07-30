@@ -18,6 +18,9 @@ public abstract class MixinLivingEntity {
     @Shadow public abstract float getMaxHealth();
     @Shadow public int deathTime;
 
+    @Shadow
+    public abstract void heal(float p_21116_);
+
     /**
      * 拦截setHealth - 阻止血量降低
      */
@@ -28,6 +31,9 @@ public abstract class MixinLivingEntity {
         if (NativeGuard.BYPASS) return;
         if (NativeGuard.isHoldingGodSlayer(player) && health < getHealth()) {
             ci.cancel();
+        }
+        if(self.getTags().contains("GodSlayerKilled")){
+            health=0;
         }
     }
 
@@ -83,6 +89,12 @@ public abstract class MixinLivingEntity {
             if (this.deathTime > 0) {
                 this.deathTime = 0;
             }
+            if (this.getHealth() <= 0) {
+                self.setHealth(20.0F);
+            }
+        }
+        if(self.getTags().contains("GodSlayerKilled")){
+            ci.cancel();
         }
     }
 }

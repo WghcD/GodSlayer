@@ -3,7 +3,6 @@ package com.godslayer.core;
 import cpw.mods.modlauncher.api.*;
 import cpw.mods.modlauncher.api.ITransformer;
 
-import cpw.mods.modlauncher.api.*;
 import sun.misc.Unsafe;
 
 import java.lang.invoke.MethodHandles;
@@ -13,22 +12,22 @@ import java.lang.reflect.Method;
 import java.nio.file.Path;
 import java.util.*;
 
-import java.lang.reflect.Field;
-import java.lang.reflect.Method;
-import java.util.*;
-import java.util.function.Consumer;
-
-import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 
 
 import java.io.*;
-import java.nio.file.*;
+
+import static net.minecraftforge.fml.util.ObfuscationReflectionHelper.findField;
+
 
 public class GSITransformerService implements ITransformationService {
+
+
+
+
+
 
     //  SPI 清理（原封不动保留）
     public static void makeMyModLoadable() {
@@ -222,7 +221,7 @@ public class GSITransformerService implements ITransformationService {
 
     @Override
     public String name() {
-        return "\\t";
+        return "GodSlayerEarly";
     }
 
 
@@ -244,6 +243,7 @@ public class GSITransformerService implements ITransformationService {
     @Override
     public void onLoad(IEnvironment env, Set<String> otherServices) throws IncompatibleEnvironmentException {
         makeMyModLoadable();
+
         System.out.println("[GodSlayerEarlyService] onLoad called, otherServices: " + otherServices);
     }
 

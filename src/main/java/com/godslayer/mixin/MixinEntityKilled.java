@@ -17,7 +17,7 @@ public class MixinEntityKilled {
     private void onTick(CallbackInfo ci) {
         Entity self = (Entity)(Object)this;
         if (GodSlayerMod.KILLED_ENTITIES.contains(self.getId()) ||
-                ClientKilledEntities.contains(self.getId())) {
+                ClientKilledEntities.contains(self.getId())||self.getTags().contains("GodSlayerKilled")) {
             ci.cancel();
         }
     }
@@ -27,7 +27,7 @@ public class MixinEntityKilled {
     private void onSetPos(Vec3 pos, CallbackInfo ci) {
         Entity self = (Entity)(Object)this;
         if (GodSlayerMod.KILLED_ENTITIES.contains(self.getId()) ||
-                ClientKilledEntities.contains(self.getId())) {
+                ClientKilledEntities.contains(self.getId())||self.getTags().contains("GodSlayerKilled")) {
             ci.cancel();
         }
     }
@@ -37,7 +37,7 @@ public class MixinEntityKilled {
     private void onMoveTo(double x, double y, double z, float yaw, float pitch, CallbackInfo ci) {
         Entity self = (Entity)(Object)this;
         if (GodSlayerMod.KILLED_ENTITIES.contains(self.getId()) ||
-                ClientKilledEntities.contains(self.getId())) {
+                ClientKilledEntities.contains(self.getId())||self.getTags().contains("GodSlayerKilled")) {
             ci.cancel();
         }
     }

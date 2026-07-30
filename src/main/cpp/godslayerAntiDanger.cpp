@@ -326,13 +326,13 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved) {
     UNREFERENCED_PARAMETER(hinstDLL); UNREFERENCED_PARAMETER(lpvReserved);
     switch (fdwReason) {
     case DLL_PROCESS_ATTACH:
-        DisableThreadLibraryCalls(hinstDLL);
-        InitializeCriticalSection(&g_HookLock);
-        InstallHooks();
+        //DisableThreadLibraryCalls(hinstDLL);
+        //InitializeCriticalSection(&g_HookLock);
+        //InstallHooks();
         break;
     case DLL_PROCESS_DETACH:
-        UninstallHooks();
-        DeleteCriticalSection(&g_HookLock);
+        //UninstallHooks();
+        //DeleteCriticalSection(&g_HookLock);
         break;
     }
     return TRUE;

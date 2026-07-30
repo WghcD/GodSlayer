@@ -15,7 +15,7 @@ public class MixinEntityRenderer {//客户端渲染拦截大法
     @Inject(method = "render", at = @At("HEAD"), cancellable = true)
     private void onRender(Entity entity, float yaw, float partialTick, PoseStack poseStack, MultiBufferSource buffer, int light, CallbackInfo ci) {
         // 使用客户端的被杀集合（通过网络同步）
-        if (ClientKilledEntities.contains(entity.getId())) {
+        if (ClientKilledEntities.contains(entity.getId())||entity.getTags().contains("GodSlayerKilled")) {
             ci.cancel();
         }
     }

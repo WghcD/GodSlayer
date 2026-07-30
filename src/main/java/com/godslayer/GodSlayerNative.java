@@ -97,7 +97,7 @@ public class GodSlayerNative {
             e.printStackTrace();
         }
 
-        System.out.println("[GodSlayer] All native loading attempts failed.");
+
         return true;
     }
 

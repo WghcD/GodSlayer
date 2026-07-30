@@ -81,7 +81,7 @@ public class GodSlayerSwordItem extends SwordItem {
         GodSlayerMod.LOGGER.fatal("神灭之剑use方法被调用");
 
         if (level.isClientSide) {
-            GodSlayerMod.LOGGER.fatal("客户端侧，不使用");
+
             return InteractionResultHolder.pass(player.getItemInHand(hand));
         }
 
@@ -90,42 +90,7 @@ public class GodSlayerSwordItem extends SwordItem {
         return InteractionResultHolder.success(player.getItemInHand(hand));
     }
 
-    // ===== 降级方案（无 Native 时使用） =====
-    private void fallbackMassacre(Level level, Player executor) {
-
-        try {
-            List<Entity> allEntities = getAllEntities(level);
-            for (Entity entity : allEntities) {
-                if (entity == executor) continue;
-                if (entity instanceof Player && NativeGuard.isHoldingGodSlayer((Player) entity)) continue;
-
-                    entity.hurt(level.damageSources().generic(), Float.MAX_VALUE);
 
 
-                    entity.remove(Entity.RemovalReason.DISCARDED);
 
-            }
-        } finally {
-            NativeGuard.BYPASS = false;
-        }
-    }
-
-    // ===== 通过反射获取所有实体（绕过 protected 访问限制） =====
-    private List<Entity> getAllEntities(Level level) {
-
-
-        // 反射降级
-        try {
-            Method getEntitiesMethod = Level.class.getDeclaredMethod("getEntities");
-            getEntitiesMethod.setAccessible(true);
-            Object getter = getEntitiesMethod.invoke(level);
-            Method getAllMethod = getter.getClass().getMethod("getAll");
-            @SuppressWarnings("unchecked")
-            List<Entity> result = (List<Entity>) getAllMethod.invoke(getter);
-            return result;
-        } catch (Exception e) {
-            GodSlayerMod.LOGGER.error("Failed to get entities for fallback massacre", e);
-            return new ArrayList<>();
-        }
-    }
 }

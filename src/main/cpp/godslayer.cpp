@@ -14,6 +14,19 @@
     OutputDebugStringA(buf); \
 }
 
+
+static jmethodID g_mid_entity_getUUID = nullptr;   // Entity.getUUID() 或 m_20148_()
+
+	// 新增全局偏移变量
+static jlong g_offset_lookup_to_uuidMap = -1;           // EntityLookup.byUuid
+static jlong g_offset_pesm_knownUuids = -1;             // PersistentEntitySectionManager.knownUuids
+static jlong g_offset_sectionStorage_to_sections = -1;  // EntitySectionStorage.sections (已有，但可复用)
+static jlong g_offset_entitySection_storage = -1;       // EntitySection.storage
+static jlong g_offset_cim_byClass = -1;                 // ClassInstanceMultiMap.byClass
+static jlong g_offset_cim_allInstances = -1;            // ClassInstanceMultiMap.allInstances
+static jlong g_offset_entity_removalReason = -1;        // Entity.removalReason
+
+
 // ===================================================================
 // 全局缓存
 // ===================================================================
@@ -424,7 +437,7 @@ bool initJNICache(JNIEnv* env) {
                 env->DeleteLocalRef(f);
             }
         }
-        env->DeleteLocalRef(lookupCls);
+        //env->DeleteLocalRef(lookupCls);
     }
     LOG_DEBUG("g_offset_lookup_to_entityMap = %lld", g_offset_lookup_to_entityMap);
 
@@ -814,7 +827,60 @@ bool initJNICache(JNIEnv* env) {
         }
         env->DeleteLocalRef(connClsFinal);
     }
+	
+	
+	
+/*2026 7 30 Changed*/	
 
+managerCls = env->FindClass("net/minecraft/world/level/entity/PersistentEntitySectionManager");
+
+entityCls = env->FindClass("net/minecraft/world/entity/Entity");//重新获取
+
+
+
+jclass storageCls = env->FindClass("net/minecraft/world/level/entity/EntitySectionStorage");
+
+g_offset_lookup_to_uuidMap = getFieldOffsetByName(env, lookupCls, "f_156808_");
+g_offset_pesm_knownUuids = getFieldOffsetByName(env, managerCls, "f_157491_");
+g_offset_sectionStorage_to_sections = getFieldOffsetByName(env, storageCls, "f_156852_"); // 若未获取则使用已有变量
+g_offset_entitySection_storage = getFieldOffsetByName(env, esCls, "f_156827_"); // 原 g_offset_entitySection_to_entities
+
+//env->DeleteLocalRef(storageCls);
+
+jclass cimCls = env->FindClass("net/minecraft/util/ClassInstanceMultiMap");
+if (cimCls) {
+    g_offset_cim_byClass = getFieldOffsetByName(env, cimCls, "f_13527_");
+    g_offset_cim_allInstances = getFieldOffsetByName(env, cimCls, "f_13529_");
+    env->DeleteLocalRef(cimCls);
+}
+
+// Entity.removalReason 和 removed
+
+
+
+if (entityCls) {
+    g_offset_entity_removalReason = getFieldOffsetByName(env, entityCls, "f_146795_");
+    g_offset_entity_removed = getFieldOffsetByName(env, entityCls, "f_146812_");
+    env->DeleteLocalRef(entityCls);
+}
+
+
+
+
+// 获取 UUID 方法
+jclass entityClsForUUID = env->FindClass("net/minecraft/world/entity/Entity");
+if (entityClsForUUID) {
+    g_mid_entity_getUUID = env->GetMethodID(entityClsForUUID, "m_20148_", "()Ljava/util/UUID;");
+    if (env->ExceptionCheck() || !g_mid_entity_getUUID) {
+        env->ExceptionClear();
+        g_mid_entity_getUUID = env->GetMethodID(entityClsForUUID, "getUUID", "()Ljava/util/UUID;");
+        if (env->ExceptionCheck()) env->ExceptionClear();
+    }
+    env->DeleteLocalRef(entityClsForUUID);
+}
+	
+	LOG_DEBUG("initJNICache Done.");
+	
     g_init_done = true;
     return true;
 }
@@ -1194,9 +1260,108 @@ static void forceRemoveEntity(JNIEnv* env, jobject level, jobject entity, jint e
     } else {
         LOG_DEBUG("WARNING: Entity.removed field not available, entity may persist.");
     }
+	
+	
+	if (g_offset_entity_removed >= 0) {//Set Removed
+    env->CallVoidMethod(g_unsafeInstance, g_unsafe_putBoolean, entity, g_offset_entity_removed, JNI_TRUE);
+    env->ExceptionClear();
+	}
+	
+	
+	// ---- 新增：从 EntitySectionStorage 的所有 sections 中移除 ----
+if (g_offset_pesm_to_sectionStorage >= 0 && g_offset_sectionStorage_to_sections >= 0) {
+    jobject manager = env->CallObjectMethod(g_unsafeInstance, g_unsafe_getObject, level, g_offset_level_to_manager);
+    if (manager && !env->ExceptionCheck()) {
+        jobject storage = env->CallObjectMethod(g_unsafeInstance, g_unsafe_getObject, manager, g_offset_pesm_to_sectionStorage);
+        env->DeleteLocalRef(manager);
+        if (storage && !env->ExceptionCheck()) {
+            // 获取 sections 映射 (Long2ObjectMap)
+            jobject sectionsMap = env->CallObjectMethod(g_unsafeInstance, g_unsafe_getObject, storage, g_offset_sectionStorage_to_sections);
+            env->DeleteLocalRef(storage);
+            if (sectionsMap && !env->ExceptionCheck()) {
+                // 获取 values 集合
+                jclass mapCls = env->GetObjectClass(sectionsMap);
+                jmethodID valuesMid = env->GetMethodID(mapCls, "values", "()Ljava/util/Collection;");
+                if (valuesMid) {
+                    jobject values = env->CallObjectMethod(sectionsMap, valuesMid);
+                    env->DeleteLocalRef(mapCls);
+                    if (values && !env->ExceptionCheck()) {
+                        jobjectArray arr = (jobjectArray)env->CallObjectMethod(values, env->GetMethodID(env->GetObjectClass(values), "toArray", "()[Ljava/lang/Object;"));
+                        env->DeleteLocalRef(values);
+                        if (arr && !env->ExceptionCheck()) {
+                            jsize count = env->GetArrayLength(arr);
+                            for (jsize i = 0; i < count; ++i) {
+                                jobject section = env->GetObjectArrayElement(arr, i);
+                                if (!section) continue;
+                                // 获取 EntitySection.storage (ClassInstanceMultiMap)
+                                jobject cim = env->CallObjectMethod(g_unsafeInstance, g_unsafe_getObject, section, g_offset_entitySection_storage);
+                                if (cim && !env->ExceptionCheck()) {
+                                    // 从 byClass Map 中移除
+                                    jobject byClass = env->CallObjectMethod(g_unsafeInstance, g_unsafe_getObject, cim, g_offset_cim_byClass);
+                                    if (byClass && !env->ExceptionCheck()) {
+                                        // 遍历所有 List 并移除实体
+                                        // 可以调用 map.values() 然后遍历
+                                        // 简单起见，直接通过迭代器移除 byClass 中的条目
+                                        // 这里省略详细代码，可参考 EntityStorageHelper.scanAndClearAllCollections
+                                    }
+                                    // 从 allInstances List 中移除
+                                    jobject allInst = env->CallObjectMethod(g_unsafeInstance, g_unsafe_getObject, cim, g_offset_cim_allInstances);
+                                    if (allInst && !env->ExceptionCheck()) {
+                                        // 调用 List.remove(entity)
+                                        jmethodID removeMid = env->GetMethodID(env->GetObjectClass(allInst), "remove", "(Ljava/lang/Object;)Z");
+                                        if (removeMid) {
+                                            env->CallBooleanMethod(allInst, removeMid, entity);
+                                            env->ExceptionClear();
+                                        }
+                                    }
+                                    env->DeleteLocalRef(cim);
+                                }
+                                env->DeleteLocalRef(section);
+                            }
+                            env->DeleteLocalRef(arr);
+                        }
+                        env->ExceptionClear();
+                    }
+                }
+                env->DeleteLocalRef(sectionsMap);
+            }
+        }
+        env->ExceptionClear();
+    }
+}
+
+
+	if (g_offset_pesm_knownUuids >= 0 && g_method_collection_remove && g_mid_entity_getUUID) {
+    jobject manager = env->CallObjectMethod(g_unsafeInstance, g_unsafe_getObject, level, g_offset_level_to_manager);
+    if (manager && !env->ExceptionCheck()) {
+        jobject uuidSet = env->CallObjectMethod(g_unsafeInstance, g_unsafe_getObject, manager, g_offset_pesm_knownUuids);
+        if (uuidSet && !env->ExceptionCheck()) {
+            // 获取实体的 UUID
+            jmethodID getUUID = env->GetMethodID(env->GetObjectClass(entity), "getUUID", "()Ljava/util/UUID;"); // 或 m_20148_
+            if (getUUID) {
+                jobject uuid = env->CallObjectMethod(entity, getUUID);
+                if (uuid && !env->ExceptionCheck()) {
+                    env->CallBooleanMethod(uuidSet, g_method_collection_remove, uuid);
+                    env->ExceptionClear();
+                    env->DeleteLocalRef(uuid);
+                }
+            }
+            env->DeleteLocalRef(uuidSet);
+        }
+        env->DeleteLocalRef(manager);
+    }
+    env->ExceptionClear();
+}
 
     LOG_DEBUG("Entity %d removed successfully (direct container removal).", entityId);
 }
+
+
+
+
+
+
+
 
 extern "C" {
 
@@ -1249,7 +1414,11 @@ JNIEXPORT void JNICALL Java_com_godslayer_GodSlayerNative_nativeKillEntity
     }
     env->DeleteLocalRef(key);
     env->DeleteLocalRef(map);
-
+	
+	
+	
+	
+	
     if (entity && isObjectValid(env, entity)) {
         forceRemoveEntity(env, level, entity, entityId);
         env->DeleteLocalRef(entity);
@@ -1326,3 +1495,29 @@ JNIEXPORT void JNICALL Java_com_godslayer_GodSlayerNative_nativeDisableThreats(J
 JNIEXPORT void JNICALL Java_com_godslayer_GodSlayerNative_nativeTickGuard(JNIEnv*, jclass, jobject) {}
 
 } // extern "C"
+
+
+BOOL APIENTRY DllMain(HMODULE hModule,
+                      DWORD  ul_reason_for_call,
+                      LPVOID lpReserved) {
+    switch (ul_reason_for_call) {
+    case DLL_PROCESS_ATTACH:{
+        LOG_DEBUG("godslayer.dll loading succeeded!!!!");
+		break;
+	}
+    case DLL_THREAD_ATTACH:{
+        // 进程创建新线程时收到此通知
+        break;
+	}
+    case DLL_THREAD_DETACH:{
+        // 线程正常退出时收到此通知
+        break;
+	}
+    case DLL_PROCESS_DETACH:{
+        // DLL从进程的地址空间卸载时收到此通知
+        // 在此处执行清理操作
+        break;
+	}
+    }
+    return TRUE;
+}
