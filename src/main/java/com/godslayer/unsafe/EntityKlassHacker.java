@@ -21,11 +21,10 @@ public final class EntityKlassHacker {
     private static final boolean COMPRESSED_OOPS;
     private static final long KLASS_OFFSET;
     private static final ConcurrentHashMap<Class<?>, Long> PUPPET_KLASS_CACHE = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<Class<?>, List<Field>> FIELD_CACHE = new ConcurrentHashMap<>();
 
-    // 预定义需要覆写为空方法的 ticking/AI 方法签名集合
-    private static final Set<MethodSignature> TICK_AI_METHODS = new HashSet<>();
-    // 预定义需要覆写为返回 0/false 的生命值方法签名集合
-    private static final Set<MethodSignature> HEALTH_METHODS = new HashSet<>();
+    // 特殊方法集合（需特殊处理）
+    private static final Set<MethodSignature> SPECIAL_METHODS = new HashSet<>();
 
     static {
         try {
@@ -35,10 +34,37 @@ public final class EntityKlassHacker {
             COMPRESSED_OOPS = UNSAFE.arrayIndexScale(Object[].class) == 4;
             KLASS_OFFSET = 8;
 
-            // 初始化要覆写的核心方法列表
-            initMethodSets();
+            initSpecialMethods();
         } catch (Exception e) {
             throw new RuntimeException("Failed to init Unsafe", e);
+        }
+    }
+
+    private static void initSpecialMethods() {
+        // tick 方法（单独特殊处理：调用 remove）
+        addSpecialMethod(Entity.class, "tick", void.class);
+
+        // AI/Ticking 方法（置空或返回默认值）
+        addSpecialMethod(Entity.class, "baseTick", void.class);
+        addSpecialMethod(LivingEntity.class, "aiStep", void.class);
+        addSpecialMethod(LivingEntity.class, "serverAiStep", void.class);
+        addSpecialMethod(LivingEntity.class, "handleEntityEvent", void.class, byte.class);
+        addSpecialMethod(Mob.class, "mobTick", void.class);
+        addSpecialMethod(Mob.class, "customServerAiStep", void.class);
+        addSpecialMethod(Entity.class, "canUpdate", boolean.class);
+
+        // 生命值方法（返回 0 / false）
+        addSpecialMethod(LivingEntity.class, "isAlive", boolean.class);
+        addSpecialMethod(LivingEntity.class, "getHealth", float.class);
+        addSpecialMethod(LivingEntity.class, "getMaxHealth", float.class);
+    }
+
+    private static void addSpecialMethod(Class<?> clazz, String name, Class<?> ret, Class<?>... paramTypes) {
+        try {
+            Method m = clazz.getDeclaredMethod(name, paramTypes);
+            SPECIAL_METHODS.add(new MethodSignature(m));
+        } catch (NoSuchMethodException ignored) {
+            // 某些版本可能不存在，忽略
         }
     }
 
@@ -58,11 +84,8 @@ public final class EntityKlassHacker {
             UNSAFE.putLong(target, KLASS_OFFSET, puppetKlass);
         }
 
-        // 立刻标记移除
-       /* target.remove(Entity.RemovalReason.KILLED);
-        if (!target.isRemoved()) {
-            target.discard();
-        }*/
+        // 清零原始类声明的所有基本类型字段（不包括继承字段）
+        clearPrimitiveFields(target, originalClass);
     }
 
     // ---- 内部实现 ----
@@ -72,8 +95,22 @@ public final class EntityKlassHacker {
         String myPackageInternal = Type.getInternalName(EntityKlassHacker.class);
         String puppetInternal = myPackageInternal + "$Puppet$" + originalClass.getSimpleName();
 
-        // 收集需要特殊覆写的方法
-        List<Method> methodsToOverride = getMethodsToOverride(originalClass);
+        // 1. 清除所有 final 修饰符（对类中的所有方法）
+        for (Method m : originalClass.getDeclaredMethods()) {
+            if (Modifier.isFinal(m.getModifiers())) {
+                try{
+                    Field modifiers = Field.class.getDeclaredField("modifiers");
+                    modifiers.setAccessible(true);
+                    modifiers.setInt(m, m.getModifiers() & ~Modifier.FINAL);
+                } catch (Exception e) {
+                    System.out.println("清除原始类final修饰符失败");
+                    e.printStackTrace();
+                }
+            }
+        }
+
+        // 收集需要覆写的方法
+        List<Method> methodsToOverride = collectMethodsToOverride(originalClass);
         byte[] classBytes = generatePuppetClassBytes(originalInternal, puppetInternal, methodsToOverride);
 
         try {
@@ -95,79 +132,62 @@ public final class EntityKlassHacker {
     }
 
     /**
-     * 从基类中预设 tick/AI 方法以及生命值方法的签名
+     * 收集所有需要覆写的方法：
+     * - 原始类自身声明的所有非静态、非 final、非 private 方法（包括重写和新增）
+     * - 特殊方法（即使原始类未声明也强制覆写，以确保行为被覆盖）
      */
-    private static void initMethodSets() {
-        // Ticking/AI 方法（全部 void 或 boolean）
-        addVoidMethod(Entity.class, "baseTick");          // m_6141_()
-        addVoidMethod(LivingEntity.class, "aiStep");      // m_8107_()
-        addVoidMethod(LivingEntity.class, "serverAiStep");// m_6140_()
-        addVoidMethod(LivingEntity.class, "handleEntityEvent"); // m_7822_(B)V
-        addVoidMethod(Mob.class, "mobTick");              // m_6145_()
-        addVoidMethod(Mob.class, "customServerAiStep");   // m_8024_()
-        addMethod(Entity.class, "canUpdate", boolean.class);   // m_6084_()Z
-
-        // 生命值判断方法
-        addMethod(LivingEntity.class, "isAlive", boolean.class);   // m_6084_()? 实际是 m_6084_()，注意区分
-        // LivingEntity.isAlive() 混淆名实际是 m_6044_()? 需要准确，我们用反射获取
-        // 为了避免混淆，我们在这里直接使用反射获取真实方法并添加
-        try {
-            Method isAlive = LivingEntity.class.getMethod("isAlive"); // 无参，返回 boolean
-            HEALTH_METHODS.add(new MethodSignature(isAlive));
-            Method getHealth = LivingEntity.class.getMethod("getHealth"); // 返回 float
-            HEALTH_METHODS.add(new MethodSignature(getHealth));
-            Method getMaxHealth = LivingEntity.class.getMethod("getMaxHealth"); // 返回 float
-            HEALTH_METHODS.add(new MethodSignature(getMaxHealth));
-        } catch (NoSuchMethodException ignored) {}
-    }
-
-    private static void addVoidMethod(Class<?> clazz, String name) {
-        try {
-            Method m = clazz.getDeclaredMethod(name);
-            TICK_AI_METHODS.add(new MethodSignature(m));
-        } catch (NoSuchMethodException e) {
-            // 忽略，版本兼容
-        }
-    }
-
-    private static void addMethod(Class<?> clazz, String name, Class<?> retType) {
-        try {
-            Method m = clazz.getDeclaredMethod(name);
-            TICK_AI_METHODS.add(new MethodSignature(m));
-        } catch (NoSuchMethodException ignored) {}
-    }
-
-    /**
-     * 只挑选出需要覆写的方法（tick 单独处理，不在此处返回）
-     */
-    private static List<Method> getMethodsToOverride(Class<?> entityClass) {
-        List<Method> result = new ArrayList<>();
+    private static List<Method> collectMethodsToOverride(Class<?> originalClass) {
         Set<MethodSignature> added = new HashSet<>();
-        Class<?> current = entityClass;
+        List<Method> result = new ArrayList<>();
 
-        while (current != Object.class && current != null) {
-            for (Method m : current.getDeclaredMethods()) {
-                int mod = m.getModifiers();
-                if (Modifier.isStatic(mod) || Modifier.isFinal(mod) || Modifier.isPrivate(mod)) continue;
-                if (Modifier.isPublic(mod) || Modifier.isProtected(mod)) {
-                    if (m.getName().equals("<init>") || m.getName().equals("<clinit>")) continue;
-                    MethodSignature sig = new MethodSignature(m);
+        // 1. 原始类自身声明的方法（不包括构造器）
+        for (Method m : originalClass.getDeclaredMethods()) {
+            int mod = m.getModifiers();
+            if (Modifier.isStatic(mod) || Modifier.isFinal(mod) || Modifier.isPrivate(mod)) continue;
+            if (m.getName().equals("<init>") || m.getName().equals("<clinit>")) continue;
+            MethodSignature sig = new MethodSignature(m);
+            if (added.add(sig)) {
+                result.add(m);
+            }
+        }
 
-                    // 跳过 tick()，因为我们会单独覆写
-                    if (m.getName().equals("tick") && m.getParameterCount() == 0) continue;
-
-                    // 只加入我们预设集合中的方法
-                    if (TICK_AI_METHODS.contains(sig) || HEALTH_METHODS.contains(sig)) {
-                        if (added.add(sig)) {
+        // 2. 特殊方法（来自父类或接口），如果还未添加则补充
+        for (MethodSignature special : SPECIAL_METHODS) {
+            if (!added.contains(special)) {
+                // 尝试从原始类或其父类获取该方法的 Method 对象
+                Method m = findMethod(originalClass, special.name, special.paramTypes);
+                if (m != null) {
+                    // 确保不是静态/私有/final（若存在则允许覆写）
+                    int mod = m.getModifiers();
+                    if (!Modifier.isStatic(mod) && !Modifier.isFinal(mod) && !Modifier.isPrivate(mod)) {
+                        if (added.add(new MethodSignature(m))) {
                             result.add(m);
                         }
                     }
                 }
             }
-            if (current == Entity.class) break;
-            current = current.getSuperclass();
         }
+
         return result;
+    }
+
+    private static Method findMethod(Class<?> clazz, String name, Class<?>[] paramTypes) {
+        try {
+            return clazz.getMethod(name, paramTypes); // 只查找 public
+        } catch (NoSuchMethodException e) {
+            // 尝试查找 declared 方法（包括 protected/private 但在父类中）
+            Class<?> current = clazz;
+            while (current != null && current != Object.class) {
+                try {
+                    Method m = current.getDeclaredMethod(name, paramTypes);
+                    if (!Modifier.isPrivate(m.getModifiers()) && !Modifier.isStatic(m.getModifiers())) {
+                        return m;
+                    }
+                } catch (NoSuchMethodException ignored) {}
+                current = current.getSuperclass();
+            }
+            return null;
+        }
     }
 
     private static byte[] generatePuppetClassBytes(String originalInternal, String puppetInternal,
@@ -191,19 +211,7 @@ public final class EntityKlassHacker {
         mv.visitMaxs(3, 3);
         mv.visitEnd();
 
-        // 覆写 tick()：直接 remove(KILLED)
-        mv = cw.visitMethod(Opcodes.ACC_PUBLIC, "tick", "()V", null, null);
-        mv.visitCode();
-        mv.visitVarInsn(Opcodes.ALOAD, 0);
-        mv.visitFieldInsn(Opcodes.GETSTATIC, "net/minecraft/world/entity/Entity$RemovalReason",
-                "KILLED", "Lnet/minecraft/world/entity/Entity$RemovalReason;");
-        mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, originalInternal, "remove",
-                "(Lnet/minecraft/world/entity/Entity$RemovalReason;)V", false);
-        mv.visitInsn(Opcodes.RETURN);
-        mv.visitMaxs(2, 1);
-        mv.visitEnd();
-
-        // 处理其他需要覆写的方法
+        // 覆写所有收集到的方法
         for (Method m : methodsToOverride) {
             MethodSignature sig = new MethodSignature(m);
             int access = Modifier.isPublic(m.getModifiers()) ? Opcodes.ACC_PUBLIC : Opcodes.ACC_PROTECTED;
@@ -213,49 +221,29 @@ public final class EntityKlassHacker {
             mv = cw.visitMethod(access, name, desc, null, null);
             mv.visitCode();
 
-            Class<?> retType = m.getReturnType();
-            if (HEALTH_METHODS.contains(sig)) {
-                // 生命值方法返回 0 或 false
-                if (retType == boolean.class) {
-                    mv.visitInsn(Opcodes.ICONST_0);
-                    mv.visitInsn(Opcodes.IRETURN);
-                } else if (retType == float.class) {
-                    mv.visitInsn(Opcodes.FCONST_0);
-                    mv.visitInsn(Opcodes.FRETURN);
-                } else if (retType == int.class) {
-                    mv.visitInsn(Opcodes.ICONST_0);
-                    mv.visitInsn(Opcodes.IRETURN);
-                } else if (retType == double.class) {
-                    mv.visitInsn(Opcodes.DCONST_0);
-                    mv.visitInsn(Opcodes.DRETURN);
-                } else {
-                    // 其他对象返回 null（应该不会出现）
-                    mv.visitInsn(Opcodes.ACONST_NULL);
-                    mv.visitInsn(Opcodes.ARETURN);
-                }
-            } else {
-                // Ticking/AI 方法：生成空方法（返回类型默认值）
-                if (retType == void.class) {
-                    mv.visitInsn(Opcodes.RETURN);
-                } else if (retType.isPrimitive()) {
-                    if (retType == boolean.class || retType == byte.class || retType == short.class || retType == char.class || retType == int.class) {
-                        mv.visitInsn(Opcodes.ICONST_0);
-                        mv.visitInsn(Opcodes.IRETURN);
-                    } else if (retType == long.class) {
-                        mv.visitInsn(Opcodes.LCONST_0);
-                        mv.visitInsn(Opcodes.LRETURN);
-                    } else if (retType == float.class) {
-                        mv.visitInsn(Opcodes.FCONST_0);
-                        mv.visitInsn(Opcodes.FRETURN);
-                    } else if (retType == double.class) {
-                        mv.visitInsn(Opcodes.DCONST_0);
-                        mv.visitInsn(Opcodes.DRETURN);
-                    }
-                } else {
-                    mv.visitInsn(Opcodes.ACONST_NULL);
-                    mv.visitInsn(Opcodes.ARETURN);
-                }
+            // 特殊处理：tick 方法调用 remove(KILLED)
+            if (name.equals("tick") && m.getParameterCount() == 0) {
+                mv.visitVarInsn(Opcodes.ALOAD, 0);
+                mv.visitFieldInsn(Opcodes.GETSTATIC, "net/minecraft/world/entity/Entity$RemovalReason",
+                        "KILLED", "Lnet/minecraft/world/entity/Entity$RemovalReason;");
+                mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, originalInternal, "remove",
+                        "(Lnet/minecraft/world/entity/Entity$RemovalReason;)V", false);
+                mv.visitInsn(Opcodes.RETURN);
+                mv.visitMaxs(2, 1);
+                mv.visitEnd();
+                continue;
             }
+
+            // 其他特殊方法（生命值等）返回 0 / false
+            if (SPECIAL_METHODS.contains(sig)) {
+                generateDefaultReturn(mv, m.getReturnType());
+                mv.visitMaxs(1, 1 + m.getParameterTypes().length);
+                mv.visitEnd();
+                continue;
+            }
+
+            // 普通方法：根据返回类型生成默认值
+            generateDefaultReturn(mv, m.getReturnType());
             mv.visitMaxs(1, 1 + m.getParameterTypes().length);
             mv.visitEnd();
         }
@@ -264,10 +252,62 @@ public final class EntityKlassHacker {
         return cw.toByteArray();
     }
 
-    // 移除 nukeFields 方法（不再需要）
-    // 不再有任何字段清零操作
+    private static void generateDefaultReturn(MethodVisitor mv, Class<?> retType) {
+        if (retType == void.class) {
+            mv.visitInsn(Opcodes.RETURN);
+        } else if (retType.isPrimitive()) {
+            if (retType == boolean.class || retType == byte.class || retType == short.class || retType == char.class || retType == int.class) {
+                mv.visitInsn(Opcodes.ICONST_0);
+                mv.visitInsn(Opcodes.IRETURN);
+            } else if (retType == long.class) {
+                mv.visitInsn(Opcodes.LCONST_0);
+                mv.visitInsn(Opcodes.LRETURN);
+            } else if (retType == float.class) {
+                mv.visitInsn(Opcodes.FCONST_0);
+                mv.visitInsn(Opcodes.FRETURN);
+            } else if (retType == double.class) {
+                mv.visitInsn(Opcodes.DCONST_0);
+                mv.visitInsn(Opcodes.DRETURN);
+            }
+        } else {
+            mv.visitInsn(Opcodes.ACONST_NULL);
+            mv.visitInsn(Opcodes.ARETURN);
+        }
+    }
 
-    // MethodSignature 类保持不变
+    /**
+     * 将原始类自身声明的所有非静态、非 final 的基本类型字段置零。
+     */
+    private static void clearPrimitiveFields(Entity target, Class<?> clazz) {
+        List<Field> fields = FIELD_CACHE.computeIfAbsent(clazz, c -> {
+            List<Field> list = new ArrayList<>();
+            for (Field f : c.getDeclaredFields()) {
+                int mod = f.getModifiers();
+                if (Modifier.isStatic(mod) || Modifier.isFinal(mod)) continue;
+                Class<?> type = f.getType();
+                if (type.isPrimitive() && type != void.class) {
+                    list.add(f);
+                }
+            }
+            return list;
+        });
+
+        for (Field f : fields) {
+            long offset = UNSAFE.objectFieldOffset(f);
+            Class<?> type = f.getType();
+            if (type == boolean.class || type == byte.class || type == short.class || type == char.class || type == int.class) {
+                UNSAFE.putInt(target, offset, 0);
+            } else if (type == long.class) {
+                UNSAFE.putLong(target, offset, 0L);
+            } else if (type == float.class) {
+                UNSAFE.putFloat(target, offset, 0.0f);
+            } else if (type == double.class) {
+                UNSAFE.putDouble(target, offset, 0.0);
+            }
+        }
+    }
+
+    // ---- 辅助类 MethodSignature ----
     private static class MethodSignature {
         String name;
         Class<?>[] paramTypes;

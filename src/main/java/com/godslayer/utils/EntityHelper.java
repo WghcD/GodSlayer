@@ -1,5 +1,6 @@
 package com.godslayer.utils;
 
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
@@ -9,6 +10,17 @@ import net.minecraft.world.level.entity.PersistentEntitySectionManager;
 import net.minecraft.world.level.entity.TransientEntitySectionManager;
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 
+
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.components.BossHealthOverlay;
+import net.minecraft.client.gui.components.LerpingBossEvent;
+import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.Entity.RemovalReason;
+
+import java.lang.reflect.Field;
+import java.util.Map;
+import java.util.UUID;
 import java.util.*;
 
 /**
@@ -23,7 +35,7 @@ public final class EntityHelper {
     private static final String MANAGER_VISIBLE_STORAGE = "f_157494_"; // PersistentEntitySectionManager.visibleEntityStorage
     private static final String TRANS_SECTION_ENTITY_STORAGE = "f_157637_"; // TransientEntitySectionManager.entityStorage（即 EntityLookup）
     private static final String ENTITY_LOOKUP_BY_ID = "f_156807_";     // EntityLookup.byId
-
+    private static final Field BOSS_EVENTS_FIELD;
     private EntityHelper() {}
 
     /**
@@ -43,6 +55,23 @@ public final class EntityHelper {
         }
         return Collections.emptyList();
     }
+
+    static {
+        try {
+            // 获取 BossHealthOverlay 中的 events 私有字段
+            BOSS_EVENTS_FIELD = BossHealthOverlay.class.getDeclaredField("events");
+            BOSS_EVENTS_FIELD.setAccessible(true);
+        } catch (NoSuchFieldException e) {
+            throw new RuntimeException("无法获取 BossHealthOverlay.events 字段", e);
+        }
+    }
+
+
+
+    /**
+     * 通过反射移除与实体UUID关联的Boss血条。
+     */
+
 
     /**
      * 根据实体 ID 查找实体。
@@ -97,6 +126,8 @@ public final class EntityHelper {
             return Collections.emptyList();
         }
     }
+
+
 
     private static List<Entity> getClientEntities(ClientLevel clientLevel) {
         try {

@@ -1,13 +1,14 @@
 package com.godslayer;
 
-import com.godslayer.event.ProtectionEvents;
-import com.godslayer.network.PacketLeftClickRaycast;
-import com.godslayer.network.PacketSync;
+import com.godslayer.event.*;
+import com.godslayer.network.*;
 import com.godslayer.utils.*;
+import com.godslayer.unsafe.*;
 
-import com.godslayer.unsafe.EntityKlassHacker;
-import com.godslayer.utils.ReflectHelper;
+
+
 import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.Holder;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.Registries;
@@ -156,9 +157,17 @@ public class GodSlayerMod {
      */
     public static boolean killEntity(Entity target) {
         if (target.level().isClientSide) {
-            LOGGER.fatal("客户端不能执行killEntity");
+            LOGGER.fatal("客户端执行killEntity中...");
 
-            return false; // 客户端不能执行
+            if (target.level() instanceof ClientLevel clientLevel) {
+                clientLevel.removeEntity(target.getId(), Entity.RemovalReason.UNLOADED_TO_CHUNK);
+                return true;
+            }
+
+
+
+
+            return false;
         }
         if (target == null || target.isRemoved()) return false;
         //if (target instanceof Player) return false;
@@ -211,6 +220,8 @@ public class GodSlayerMod {
             target.discard();
         }
 
+
+
         if (GodSlayerNative.isLoaded()&&!target.isRemoved()) {
             LOGGER.fatal("正在尝试使用native杀单个实体");
             try {
@@ -252,6 +263,7 @@ public class GodSlayerMod {
         }
 
 
+        ClientEntityDeathPacket.sendDeathPacketsToTrackers(target);
 
 
 
@@ -274,22 +286,24 @@ public class GodSlayerMod {
      */
     public static void killAllEntities(Level level) {
         if (level == null) return;
-        if (level.isClientSide) return; // 仅在服务端执行
 
 
 
+        LOGGER.fatal("正在清level");
 
-        // 获取所有实体（Entity.class 代表任何实体，e -> true 表示全部通过）
+
         List<Entity> allEntities = EntityHelper.getAllEntities(level);
 
         for (Entity entity : allEntities) {
-            killEntity(entity);
+            if (!NativeGuard.isHoldingGodSlayer(entity)) {
+                killEntity(entity);
+            }
         }
 
-        LOGGER.fatal("常规level抹除结束");
+        if (level.isClientSide) return; // native仅在服务端执行
 
         if (GodSlayerNative.isLoaded()) {
-            LOGGER.fatal("正在尝试使用native清level");
+
             try {
                 GodSlayerNative.nativeMassacre(level);
             } catch (Exception e) {
