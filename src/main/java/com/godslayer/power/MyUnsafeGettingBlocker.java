@@ -41,7 +41,7 @@ public final class MyUnsafeGettingBlocker {
 
     // ==================== 状态 ====================
 
-    private static final Instrumentation inst = GodSlayerNative.inst;
+    public static final Instrumentation inst = GodSlayerNative.inst;
 
     private static final AtomicBoolean installed = new AtomicBoolean(false);
 

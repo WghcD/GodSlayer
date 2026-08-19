@@ -1,5 +1,6 @@
 package com.godslayer;
 
+import com.godslayer.power.MyUnsafeGettingBlocker;
 import net.minecraft.world.level.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -41,9 +42,11 @@ public class GodSlayerNative {
 
         }
 
+
+
         installAllProtections();
 
-        disableAllUnsafeAccess();
+        //disableAllUnsafeAccess();
 
     }
 

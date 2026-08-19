@@ -4,8 +4,9 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
-import net.minecraft.world.level.Level;
 import org.objectweb.asm.*;
+import org.objectweb.asm.commons.ClassRemapper;
+import org.objectweb.asm.commons.Remapper;
 import sun.misc.Unsafe;
 
 import java.lang.invoke.MethodHandles;
@@ -22,8 +23,8 @@ public final class EntityKlassHacker {
     private static final long KLASS_OFFSET;
     private static final ConcurrentHashMap<Class<?>, Long> PUPPET_KLASS_CACHE = new ConcurrentHashMap<>();
     private static final ConcurrentHashMap<Class<?>, List<Field>> FIELD_CACHE = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<Class<?>, Class<?>> DEFINALIZED_CLASS_CACHE = new ConcurrentHashMap<>();
 
-    // 特殊方法集合（需特殊处理）
     private static final Set<MethodSignature> SPECIAL_METHODS = new HashSet<>();
 
     static {
@@ -41,10 +42,7 @@ public final class EntityKlassHacker {
     }
 
     private static void initSpecialMethods() {
-        // tick 方法（单独特殊处理：调用 remove）
         addSpecialMethod(Entity.class, "tick", void.class);
-
-        // AI/Ticking 方法（置空或返回默认值）
         addSpecialMethod(Entity.class, "baseTick", void.class);
         addSpecialMethod(LivingEntity.class, "aiStep", void.class);
         addSpecialMethod(LivingEntity.class, "serverAiStep", void.class);
@@ -52,8 +50,6 @@ public final class EntityKlassHacker {
         addSpecialMethod(Mob.class, "mobTick", void.class);
         addSpecialMethod(Mob.class, "customServerAiStep", void.class);
         addSpecialMethod(Entity.class, "canUpdate", boolean.class);
-
-        // 生命值方法（返回 0 / false）
         addSpecialMethod(LivingEntity.class, "isAlive", boolean.class);
         addSpecialMethod(LivingEntity.class, "getHealth", float.class);
         addSpecialMethod(LivingEntity.class, "getMaxHealth", float.class);
@@ -64,7 +60,6 @@ public final class EntityKlassHacker {
             Method m = clazz.getDeclaredMethod(name, paramTypes);
             SPECIAL_METHODS.add(new MethodSignature(m));
         } catch (NoSuchMethodException ignored) {
-            // 某些版本可能不存在，忽略
         }
     }
 
@@ -75,43 +70,108 @@ public final class EntityKlassHacker {
         if (target == null || target.isRemoved()) return;
 
         Class<?> originalClass = target.getClass();
-        long puppetKlass = PUPPET_KLASS_CACHE.computeIfAbsent(originalClass, EntityKlassHacker::generatePuppetKlass);
+        Class<?> parentClass = resolveParentKlass(originalClass);
+        long puppetKlass = PUPPET_KLASS_CACHE.computeIfAbsent(
+                originalClass,
+                key -> generatePuppetKlass(key, parentClass)
+        );
 
-        // 篡改 klass 指针
         if (COMPRESSED_OOPS) {
             UNSAFE.putInt(target, KLASS_OFFSET, (int) (puppetKlass & 0xFFFF_FFFFL));
         } else {
             UNSAFE.putLong(target, KLASS_OFFSET, puppetKlass);
         }
 
-        // 清零原始类声明的所有基本类型字段（不包括继承字段）
-        clearPrimitiveFields(target, originalClass);
+        // 按实际父类布局清理基础类型字段
+        clearPrimitiveFields(target, parentClass);
     }
 
     // ---- 内部实现 ----
 
-    private static long generatePuppetKlass(Class<?> originalClass) {
-        String originalInternal = Type.getInternalName(originalClass);
+    /**
+     * 如果原类不是 final，直接返回原类。
+     * 如果是 final，则创建并缓存一个去 final 的副本类，供傀儡继承。
+     */
+    private static Class<?> resolveParentKlass(Class<?> originalClass) {
+        if (!Modifier.isFinal(originalClass.getModifiers())) {
+            return originalClass;
+        }
+        return DEFINALIZED_CLASS_CACHE.computeIfAbsent(originalClass, EntityKlassHacker::defineDefinalizedClass);
+    }
+
+    /**
+     * 读取 final 类的字节码，去掉 ACC_FINAL，并复制到同包的新类中。
+     */
+    private static Class<?> defineDefinalizedClass(Class<?> originalClass) {
+        try {
+            String originalInternal = Type.getInternalName(originalClass);
+            String resource = "/" + originalInternal + ".class";
+            java.io.InputStream in = originalClass.getResourceAsStream(resource);
+            if (in == null) {
+                throw new IllegalStateException("Cannot find class resource: " + resource);
+            }
+            byte[] originalBytes = in.readAllBytes();
+            in.close();
+
+            ClassReader cr = new ClassReader(originalBytes);
+            ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_FRAMES);
+
+            String newInternal = originalInternal + "$GodslayerDefinalized";
+
+            Remapper remapper = new Remapper() {
+                @Override
+                public String map(String internalName) {
+                    if (originalInternal.equals(internalName)) {
+                        return newInternal;
+                    }
+                    return super.map(internalName);
+                }
+            };
+
+            ClassVisitor remapperVisitor = new ClassRemapper(cw, remapper);
+
+            ClassVisitor finalRemover = new ClassVisitor(Opcodes.ASM9, remapperVisitor) {
+                @Override
+                public void visit(int version, int access, String name, String signature,
+                                  String superName, String[] interfaces) {
+                    // 去掉 ACC_FINAL，让傀儡类可以继承
+                    super.visit(version, access & ~Opcodes.ACC_FINAL, name, signature, superName, interfaces);
+                }
+
+                @Override
+                public MethodVisitor visitMethod(int access, String name, String descriptor,
+                                                 String signature, String[] exceptions) {
+                    // 删除静态初始化块，避免重复执行原类的副作用
+                    if (name.equals("<clinit>")) {
+                        return null;
+                    }
+                    return super.visitMethod(access, name, descriptor, signature, exceptions);
+                }
+            };
+
+            cr.accept(finalRemover, 0);
+            byte[] definalizedBytes = cw.toByteArray();
+
+            // 用原类的 Lookup 定义同包新类，保证包私有访问权限
+            MethodHandles.Lookup lookup = MethodHandles.privateLookupIn(
+                    originalClass,
+                    MethodHandles.lookup()
+            );
+            return lookup.defineClass(definalizedBytes);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to definalize final entity class: " + originalClass.getName(), e);
+        }
+    }
+
+    private static long generatePuppetKlass(Class<?> originalClass, Class<?> parentClass) {
+        String parentInternal = Type.getInternalName(parentClass);
         String myPackageInternal = Type.getInternalName(EntityKlassHacker.class);
         String puppetInternal = myPackageInternal + "$Puppet$" + originalClass.getSimpleName();
 
-        // 1. 清除所有 final 修饰符（对类中的所有方法）
-        for (Method m : originalClass.getDeclaredMethods()) {
-            if (Modifier.isFinal(m.getModifiers())) {
-                try{
-                    Field modifiers = Field.class.getDeclaredField("modifiers");
-                    modifiers.setAccessible(true);
-                    modifiers.setInt(m, m.getModifiers() & ~Modifier.FINAL);
-                } catch (Exception e) {
-                    System.out.println("清除原始类final修饰符失败");
-                    e.printStackTrace();
-                }
-            }
-        }
-
-        // 收集需要覆写的方法
-        List<Method> methodsToOverride = collectMethodsToOverride(originalClass);
-        byte[] classBytes = generatePuppetClassBytes(originalInternal, puppetInternal, methodsToOverride);
+        // 收集需要覆写的方法。注意这里传入 parentClass，而不是 originalClass。
+        // 对于 final 类，方法签名已经被去 final 副本重映射过，必须用副本的 Method 来生成覆写描述符。
+        List<Method> methodsToOverride = collectMethodsToOverride(parentClass);
+        byte[] classBytes = generatePuppetClassBytes(parentInternal, puppetInternal, methodsToOverride);
 
         try {
             MethodHandles.Lookup lookup = MethodHandles.lookup();
@@ -131,17 +191,11 @@ public final class EntityKlassHacker {
         }
     }
 
-    /**
-     * 收集所有需要覆写的方法：
-     * - 原始类自身声明的所有非静态、非 final、非 private 方法（包括重写和新增）
-     * - 特殊方法（即使原始类未声明也强制覆写，以确保行为被覆盖）
-     */
-    private static List<Method> collectMethodsToOverride(Class<?> originalClass) {
+    private static List<Method> collectMethodsToOverride(Class<?> parentClass) {
         Set<MethodSignature> added = new HashSet<>();
         List<Method> result = new ArrayList<>();
 
-        // 1. 原始类自身声明的方法（不包括构造器）
-        for (Method m : originalClass.getDeclaredMethods()) {
+        for (Method m : parentClass.getDeclaredMethods()) {
             int mod = m.getModifiers();
             if (Modifier.isStatic(mod) || Modifier.isFinal(mod) || Modifier.isPrivate(mod)) continue;
             if (m.getName().equals("<init>") || m.getName().equals("<clinit>")) continue;
@@ -151,13 +205,10 @@ public final class EntityKlassHacker {
             }
         }
 
-        // 2. 特殊方法（来自父类或接口），如果还未添加则补充
         for (MethodSignature special : SPECIAL_METHODS) {
             if (!added.contains(special)) {
-                // 尝试从原始类或其父类获取该方法的 Method 对象
-                Method m = findMethod(originalClass, special.name, special.paramTypes);
+                Method m = findMethod(parentClass, special.name, special.paramTypes);
                 if (m != null) {
-                    // 确保不是静态/私有/final（若存在则允许覆写）
                     int mod = m.getModifiers();
                     if (!Modifier.isStatic(mod) && !Modifier.isFinal(mod) && !Modifier.isPrivate(mod)) {
                         if (added.add(new MethodSignature(m))) {
@@ -173,9 +224,8 @@ public final class EntityKlassHacker {
 
     private static Method findMethod(Class<?> clazz, String name, Class<?>[] paramTypes) {
         try {
-            return clazz.getMethod(name, paramTypes); // 只查找 public
+            return clazz.getMethod(name, paramTypes);
         } catch (NoSuchMethodException e) {
-            // 尝试查找 declared 方法（包括 protected/private 但在父类中）
             Class<?> current = clazz;
             while (current != null && current != Object.class) {
                 try {
@@ -183,17 +233,18 @@ public final class EntityKlassHacker {
                     if (!Modifier.isPrivate(m.getModifiers()) && !Modifier.isStatic(m.getModifiers())) {
                         return m;
                     }
-                } catch (NoSuchMethodException ignored) {}
+                } catch (NoSuchMethodException ignored) {
+                }
                 current = current.getSuperclass();
             }
             return null;
         }
     }
 
-    private static byte[] generatePuppetClassBytes(String originalInternal, String puppetInternal,
+    private static byte[] generatePuppetClassBytes(String parentInternal, String puppetInternal,
                                                    List<Method> methodsToOverride) {
         ClassWriter cw = new ClassWriter(ClassWriter.COMPUTE_FRAMES);
-        cw.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, puppetInternal, null, originalInternal, null);
+        cw.visit(Opcodes.V17, Opcodes.ACC_PUBLIC, puppetInternal, null, parentInternal, null);
 
         // 构造器：super(null, null)
         MethodVisitor mv = cw.visitMethod(Opcodes.ACC_PUBLIC, "<init>",
@@ -205,13 +256,12 @@ public final class EntityKlassHacker {
         mv.visitVarInsn(Opcodes.ALOAD, 0);
         mv.visitInsn(Opcodes.ACONST_NULL);
         mv.visitInsn(Opcodes.ACONST_NULL);
-        mv.visitMethodInsn(Opcodes.INVOKESPECIAL, originalInternal, "<init>",
+        mv.visitMethodInsn(Opcodes.INVOKESPECIAL, parentInternal, "<init>",
                 "(Lnet/minecraft/world/entity/EntityType;Lnet/minecraft/world/level/Level;)V", false);
         mv.visitInsn(Opcodes.RETURN);
         mv.visitMaxs(3, 3);
         mv.visitEnd();
 
-        // 覆写所有收集到的方法
         for (Method m : methodsToOverride) {
             MethodSignature sig = new MethodSignature(m);
             int access = Modifier.isPublic(m.getModifiers()) ? Opcodes.ACC_PUBLIC : Opcodes.ACC_PROTECTED;
@@ -221,12 +271,11 @@ public final class EntityKlassHacker {
             mv = cw.visitMethod(access, name, desc, null, null);
             mv.visitCode();
 
-            // 特殊处理：tick 方法调用 remove(KILLED)
             if (name.equals("tick") && m.getParameterCount() == 0) {
                 mv.visitVarInsn(Opcodes.ALOAD, 0);
                 mv.visitFieldInsn(Opcodes.GETSTATIC, "net/minecraft/world/entity/Entity$RemovalReason",
                         "KILLED", "Lnet/minecraft/world/entity/Entity$RemovalReason;");
-                mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, originalInternal, "remove",
+                mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL, parentInternal, "remove",
                         "(Lnet/minecraft/world/entity/Entity$RemovalReason;)V", false);
                 mv.visitInsn(Opcodes.RETURN);
                 mv.visitMaxs(2, 1);
@@ -234,7 +283,6 @@ public final class EntityKlassHacker {
                 continue;
             }
 
-            // 其他特殊方法（生命值等）返回 0 / false
             if (SPECIAL_METHODS.contains(sig)) {
                 generateDefaultReturn(mv, m.getReturnType());
                 mv.visitMaxs(1, 1 + m.getParameterTypes().length);
@@ -242,7 +290,6 @@ public final class EntityKlassHacker {
                 continue;
             }
 
-            // 普通方法：根据返回类型生成默认值
             generateDefaultReturn(mv, m.getReturnType());
             mv.visitMaxs(1, 1 + m.getParameterTypes().length);
             mv.visitEnd();
@@ -275,9 +322,6 @@ public final class EntityKlassHacker {
         }
     }
 
-    /**
-     * 将原始类自身声明的所有非静态、非 final 的基本类型字段置零。
-     */
     private static void clearPrimitiveFields(Entity target, Class<?> clazz) {
         List<Field> fields = FIELD_CACHE.computeIfAbsent(clazz, c -> {
             List<Field> list = new ArrayList<>();
