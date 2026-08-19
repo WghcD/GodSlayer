@@ -326,6 +326,7 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD fdwReason, LPVOID lpvReserved) {
     UNREFERENCED_PARAMETER(hinstDLL); UNREFERENCED_PARAMETER(lpvReserved);
     switch (fdwReason) {
     case DLL_PROCESS_ATTACH:
+		LOG_DEBUG("GodSlayerAntiDangerMoudle Loaded!");
         //DisableThreadLibraryCalls(hinstDLL);
         //InitializeCriticalSection(&g_HookLock);
         //InstallHooks();

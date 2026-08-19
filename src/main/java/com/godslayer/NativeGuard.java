@@ -20,6 +20,7 @@ public class NativeGuard {
     // 记录曾持有神剑的玩家 UUID（直到玩家断开连接）
     private static final Set<UUID> EVER_HELD = new HashSet<>();
 
+    private static final Set<Entity> EntityWhichShouldBlockAll=new HashSet<>();
     // ===== 检查玩家是否已完全初始化 =====
     private static boolean isPlayerReady(Player player) {
         if (player == null) return false;
@@ -35,6 +36,12 @@ public class NativeGuard {
     public static boolean isHoldingGodSlayer(Entity entity) {
         if (!(entity instanceof LivingEntity lEntity)) return false;
         return isHoldingGodSlayer(lEntity);
+    }
+
+    public static boolean AddBlockedEntity(Entity entity){
+        EntityWhichShouldBlockAll.add(entity);
+        return true;
+
     }
 
     // ===== 持有判定 =====
@@ -107,6 +114,13 @@ public class NativeGuard {
         if (!(entity instanceof Player player)) return false;
         if (!isHoldingGodSlayer(player)) return false;
         return deathTime > 0;
+    }
+
+    public static boolean shouldBlockAll(Entity entity) {//給我攔截!!
+        if (BYPASS) return false;
+        if (entity instanceof Player) {return false;}
+
+        return EntityWhichShouldBlockAll.contains(entity);
     }
 
     public static boolean shouldBlockDropLoot(Player player) {

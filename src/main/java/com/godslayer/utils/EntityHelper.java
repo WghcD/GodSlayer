@@ -35,7 +35,7 @@ public final class EntityHelper {
     private static final String MANAGER_VISIBLE_STORAGE = "f_157494_"; // PersistentEntitySectionManager.visibleEntityStorage
     private static final String TRANS_SECTION_ENTITY_STORAGE = "f_157637_"; // TransientEntitySectionManager.entityStorage（即 EntityLookup）
     private static final String ENTITY_LOOKUP_BY_ID = "f_156807_";     // EntityLookup.byId
-    private static final Field BOSS_EVENTS_FIELD;
+
     private EntityHelper() {}
 
     /**
@@ -56,15 +56,7 @@ public final class EntityHelper {
         return Collections.emptyList();
     }
 
-    static {
-        try {
-            // 获取 BossHealthOverlay 中的 events 私有字段
-            BOSS_EVENTS_FIELD = BossHealthOverlay.class.getDeclaredField("events");
-            BOSS_EVENTS_FIELD.setAccessible(true);
-        } catch (NoSuchFieldException e) {
-            throw new RuntimeException("无法获取 BossHealthOverlay.events 字段", e);
-        }
-    }
+
 
 
 

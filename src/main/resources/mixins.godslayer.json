@@ -8,15 +8,18 @@
   "mixins": [
     "MixinLivingEntity",
     "MixinEntity",
-    "MixinEntityKilled",
-    "MixinServerPlayer"
+    "MixinServerPlayer",
+    "MixinPersistentEntitySectionManager"
   ],
   "client": [
     "MixinMinecraftClient",
-    "MixinEntityRenderer",
-    "MixinGameRenderer"
+    "MixinGameRenderer",
+    "MixinEntityRenderer2"
+
   ],
-  "server": [],
+  "server": [
+
+  ],
   "injectors": {
     "defaultRequire": 1
   }

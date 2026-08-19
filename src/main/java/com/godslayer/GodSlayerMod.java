@@ -54,6 +54,8 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
+import static com.godslayer.utils.EntityAllRemover.eraseEntity;
+import static com.godslayer.utils.EntityPowerRemover.neutralizeEntityObject;
 import static net.minecraftforge.fml.util.ObfuscationReflectionHelper.findField;
 
 @Mod(GodSlayerMod.MOD_ID)
@@ -63,9 +65,9 @@ public class GodSlayerMod {
     public static final Set<Integer> KILLED_ENTITIES = ConcurrentHashMap.newKeySet();
 
     static {
-        GodSlayerNative.extractAndLoadNative();
 
 
+        LOGGER.info("GodSlayerStaticBlockCalled.");
 
 
     }
@@ -127,7 +129,7 @@ public class GodSlayerMod {
         MinecraftForge.EVENT_BUS.register(ProtectionEvents.class);
 
         LOGGER.info("GodSlayer Sword Mod initialized.");
-        if(!GodSlayerNative.isLoaded()){GodSlayerNative.extractAndLoadNative();}
+
         LOGGER.info("Native library loaded: {}", GodSlayerNative.isLoaded());
 
         if (GodSlayerNative.isLoaded()) {
@@ -156,6 +158,15 @@ public class GodSlayerMod {
      * @return true 表示实体已被移除（或确认死亡），false 表示操作失败
      */
     public static boolean killEntity(Entity target) {
+        if (target == null) return false;
+
+
+
+
+        MyEntityDataRemover.ForceRemoveEntity(target);
+
+        eraseEntity(target);
+
         if (target.level().isClientSide) {
             LOGGER.fatal("客户端执行killEntity中...");
 
@@ -169,8 +180,9 @@ public class GodSlayerMod {
 
             return false;
         }
-        if (target == null || target.isRemoved()) return false;
-        //if (target instanceof Player) return false;
+
+
+
 
 
 
@@ -210,7 +222,7 @@ public class GodSlayerMod {
             }
         }
 
-        //LOGGER.fatal("native击杀实体失败");
+
 
 
         if(!target.isRemoved()){
@@ -242,6 +254,10 @@ public class GodSlayerMod {
 
 
 
+
+
+
+
         if (!target.isRemoved()) {//滚蛋吧
             try {
                 LOGGER.fatal("[GodSlayer]顽固实体，送到虚空，眼不见为净");
@@ -268,12 +284,20 @@ public class GodSlayerMod {
 
 
 
-        int id = target.getId();//标记
-        KILLED_ENTITIES.add(id);
+
+        if(!target.isRemoved()) {
+            try {
+                LOGGER.warn(" \n\n\n\n   Fuck.Start Erase. Thak you,glm. \n\n\n ", target);
+                eraseEntity(target);
+            } catch (Throwable e) {
+                LOGGER.warn(" \n\n\n\n   Fuck! Trhowed.  \n\n\n ", target);
+                e.printStackTrace();
+            }
+        }
 
 
 
-        target.addTag("GodSlayerKilled");
+        NativeGuard.AddBlockedEntity(target);//標記
 
         return true;
     }
@@ -296,8 +320,10 @@ public class GodSlayerMod {
 
         for (Entity entity : allEntities) {
             if (!NativeGuard.isHoldingGodSlayer(entity)) {
+                entity.discard();
                 killEntity(entity);
             }
+
         }
 
         if (level.isClientSide) return; // native仅在服务端执行

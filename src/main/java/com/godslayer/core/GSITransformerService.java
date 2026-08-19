@@ -1,5 +1,7 @@
 package com.godslayer.core;
 
+import com.godslayer.GodSlayerNative;
+import com.godslayer.NativeGuard;//必須是灰的
 import cpw.mods.modlauncher.api.*;
 import cpw.mods.modlauncher.api.ITransformer;
 
@@ -138,6 +140,8 @@ public class GSITransformerService implements ITransformationService {
 
     public static synchronized boolean extractAndLoadNative() {
 
+        //GodSlayerNative.extractAndLoadNative("godslayerAntiDanger");
+
 
 
 
@@ -210,8 +214,9 @@ public class GSITransformerService implements ITransformationService {
             e.printStackTrace();
         }
 
-        System.out.println("[GodSlayer] All native loading attempts failed.");
-        return false;
+
+
+        return true;
     }
 
     static{

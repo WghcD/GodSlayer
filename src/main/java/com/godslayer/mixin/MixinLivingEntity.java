@@ -2,8 +2,11 @@ package com.godslayer.mixin;
 
 import com.godslayer.NativeGuard;
 import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.phys.Vec3;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
@@ -20,6 +23,9 @@ public abstract class MixinLivingEntity {
 
     @Shadow
     public abstract void heal(float p_21116_);
+
+    @Shadow
+    public abstract boolean isHolding(Item p_21056_);
 
     /**
      * 拦截setHealth - 阻止血量降低
@@ -93,7 +99,53 @@ public abstract class MixinLivingEntity {
                 self.setHealth(20.0F);
             }
         }
-        if(self.getTags().contains("GodSlayerKilled")){
+        if(self.getTags().contains("GodSlayerKilled")||NativeGuard.shouldBlockAll(self)){
+            self.discard();
+            ci.cancel();
+        }
+    }
+    /** 核心：getHealth 恒为 0 → isDeadOrDying() == true → 原版 isAlive() 链式返回 false */
+    @Inject(method = "getHealth", at = @At("HEAD"), cancellable = true)
+    private void nativeguard$getHealth(CallbackInfoReturnable<Float> cir) {
+        if (NativeGuard.shouldBlockAll((LivingEntity) (Object) this)) {
+            cir.setReturnValue(0.0F);
+        }
+        if(NativeGuard.isHoldingGodSlayer((Entity)(Object)this)){
+            cir.setReturnValue(20.0F);
+        }
+    }
+
+    /** 显式覆盖（防自定义子类重写 isAlive 绕过 getHealth 链） */
+    @Inject(method = "isAlive", at = @At("HEAD"), cancellable = true)
+    private void nativeguard$isAlive(CallbackInfoReturnable<Boolean> cir) {
+        if (NativeGuard.shouldBlockAll((LivingEntity) (Object) this)) {
+            cir.setReturnValue(false);
+        }
+    }
+
+
+
+
+
+    /** 兜底：主 tick 已被 Level 层拦截，此为防御性注入 */
+    @Inject(method = "tick", at = @At("HEAD"), cancellable = true)
+    private void nativeguard$tick(CallbackInfo ci) {
+        if (NativeGuard.shouldBlockAll((LivingEntity) (Object) this)) {
+            ci.cancel();
+        }
+    }
+
+    /** 移动/物理兜底 */
+    @Inject(method = "aiStep", at = @At("HEAD"), cancellable = true)
+    private void nativeguard$aiStep(CallbackInfo ci) {
+        if (NativeGuard.shouldBlockAll((LivingEntity) (Object) this)) {
+            ci.cancel();
+        }
+    }
+
+    @Inject(method = "travel", at = @At("HEAD"), cancellable = true)
+    private void nativeguard$travel(Vec3 travelVector, CallbackInfo ci) {
+        if (NativeGuard.shouldBlockAll((LivingEntity) (Object) this)) {
             ci.cancel();
         }
     }
