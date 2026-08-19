@@ -8,8 +8,7 @@
   "mixins": [
     "MixinLivingEntity",
     "MixinEntity",
-    "MixinServerPlayer",
-    "MixinPersistentEntitySectionManager"
+    "MixinServerPlayer"
   ],
   "client": [
     "MixinMinecraftClient",

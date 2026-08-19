@@ -1,33 +1,23 @@
 package com.godslayer;
 
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import java.io.IOException;
 import java.io.InputStream;
 import java.lang.instrument.ClassDefinition;
 import java.lang.instrument.Instrumentation;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 
 
-import java.lang.instrument.ClassDefinition;
 import java.lang.instrument.ClassFileTransformer;
-import java.lang.instrument.IllegalClassFormatException;
-import java.lang.instrument.Instrumentation;
-import java.lang.reflect.Method;
 import java.security.ProtectionDomain;
 
 import java.io.*;
-import java.nio.file.*;
-import java.security.ProtectionDomain;
 
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
-
+import static com.godslayer.power.MyJavaAgentAttachBlocker.*;
+import static com.godslayer.power.MyUnsafeGettingBlocker.disableAllUnsafeAccess;
 
 
 public class GodSlayerNative {
@@ -37,7 +27,8 @@ public class GodSlayerNative {
     public static boolean InstIsReady=false;
     public static Instrumentation inst;
 
-    static{
+    static{//這裏是最後的初始化
+
         GodSlayerNative.extractAndLoadNative("godslayer");
         GodSlayerNative.extractAndLoadNative("godslayerPower");
 
@@ -50,11 +41,17 @@ public class GodSlayerNative {
 
         }
 
+        installAllProtections();
 
+        disableAllUnsafeAccess();
 
     }
 
     public static void testFullInstrumentation(Instrumentation inst) {
+
+
+
+
         System.out.println("\n=== [GodSlayer] Power Test Start ===");
 
         // 1. 检查 API 标记

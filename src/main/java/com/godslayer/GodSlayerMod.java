@@ -67,7 +67,7 @@ public class GodSlayerMod {
     static {
 
 
-        LOGGER.info("GodSlayerStaticBlockCalled.");
+        LOGGER.info("\n\nGodSlayerModMainClassStaticBlockCalled.");
 
 
     }
@@ -107,7 +107,7 @@ public class GodSlayerMod {
     );
 
     public GodSlayerMod() {
-
+        System.out.println("[GodSlayerModMainClassMainEntry]Current Class Loader: "+this.getClass().getClassLoader());
         IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
 
         // 注册物品和创造模式标签页

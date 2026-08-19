@@ -21,6 +21,8 @@ import java.nio.file.StandardCopyOption;
 
 import java.io.*;
 
+
+
 import static net.minecraftforge.fml.util.ObfuscationReflectionHelper.findField;
 
 
@@ -221,7 +223,10 @@ public class GSITransformerService implements ITransformationService {
 
     static{
         System.out.println("[GodSlayer] Early.");
+        System.out.println("Current Class Loader: "+ClassLoader.class.getClassLoader());
         extractAndLoadNative();
+
+        //installAllProtections();
     }
 
     @Override
