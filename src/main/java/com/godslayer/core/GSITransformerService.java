@@ -22,7 +22,8 @@ import java.nio.file.StandardCopyOption;
 import java.io.*;
 
 
-
+import static com.godslayer.core.EarlyNativeBridge.Init;
+import static com.godslayer.core.EarlyNativeBridge.extractAndLoadNative;
 import static net.minecraftforge.fml.util.ObfuscationReflectionHelper.findField;
 
 
@@ -140,91 +141,12 @@ public class GSITransformerService implements ITransformationService {
         System.out.println("[GSITransformerService] makeMyModLoadable() 清理完成");
     }
 
-    public static synchronized boolean extractAndLoadNative() {
 
-        //GodSlayerNative.extractAndLoadNative("godslayerAntiDanger");
-
-
-
-
-        //  从 JAR 中提取到 mods/natives 目录
-        try {
-            String libName = System.mapLibraryName("godslayerAntiDanger");
-
-            // 获取当前方法所在的类（即本工具类），从而定位其 JAR
-            Class<?> currentClass = new Object() {}.getClass().getEnclosingClass();
-            String jarPath = currentClass.getProtectionDomain().getCodeSource().getLocation().getPath();
-            if (jarPath.startsWith("/") && System.getProperty("os.name").toLowerCase().contains("windows")) {
-                jarPath = jarPath.substring(1);
-            }
-
-            File jarFile = new File(jarPath);
-            File modsDir = jarFile.getParentFile(); // mods 文件夹
-            if (modsDir == null || !modsDir.exists()) {
-                modsDir = new File("mods"); // 备用
-            }
-            System.out.println("[GodSlayer] Mods directory: " + modsDir.getAbsolutePath());
-
-            File nativesDir = new File(modsDir, "natives");
-            if (!nativesDir.exists()) {
-                if (!nativesDir.mkdirs()) {
-                    System.out.println("[GodSlayer] ERROR: Failed to create natives directory.");
-                    return false;
-                }
-                System.out.println("[GodSlayer] Created natives directory.");
-            }
-
-            File destFile = new File(nativesDir, libName);
-            if (destFile.exists()) {
-                if (!destFile.delete()) {
-                    System.out.println("[GodSlayer] WARNING: Could not delete existing native library.");
-                }
-            }
-
-            // 从 JAR 资源中加载
-            String resourcePath = "/natives/" + libName;
-            System.out.println("[GodSlayer] Attempting to extract: " + resourcePath);
-            try (InputStream in = currentClass.getResourceAsStream(resourcePath)) {
-                if (in == null) {
-                    resourcePath = "/" + libName;
-                    System.out.println("[GodSlayer] Resource not in /natives/, trying root: " + resourcePath);
-                    try (InputStream in2 = currentClass.getResourceAsStream(resourcePath)) {
-                        if (in2 == null) {
-                            System.out.println("[GodSlayer] ERROR: Native library not found in JAR.");
-                            return false;
-                        }
-                        Files.copy(in2, destFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
-                    }
-                } else {
-                    Files.copy(in, destFile.toPath(), StandardCopyOption.REPLACE_EXISTING);
-                }
-            }
-
-            destFile.setExecutable(true, false);
-            destFile.setReadable(true, false);
-            destFile.setWritable(true, true);
-
-            System.out.println("[GodSlayer] Native library extracted to: " + destFile.getAbsolutePath());
-            System.load(destFile.getAbsolutePath());
-
-            System.out.println("[GodSlayer] Native library loaded successfully.");
-            System.setProperty("godslayer.native.path", destFile.getAbsolutePath());
-            return true;
-
-        } catch (Exception e) {
-            System.out.println("[GodSlayer] ERROR: Failed to extract or load native library.");
-            e.printStackTrace();
-        }
-
-
-
-        return true;
-    }
 
     static{
-        System.out.println("[GodSlayer] Early.");
+        System.out.println("[GodSlayerITransformationStaticBlock] Early.");
         System.out.println("Current Class Loader: "+ClassLoader.class.getClassLoader());
-        extractAndLoadNative();
+        Init();
 
         //installAllProtections();
     }

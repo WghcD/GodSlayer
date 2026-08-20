@@ -98,7 +98,7 @@ jar {
     }
 
     // 包含 Native 库（如果有编译产出）
-   from('src/main/cpp/build') {
+    from('src/main/cpp/build') {
         include '*.dll', '*.so', '*.dylib'
         into 'natives'
     }

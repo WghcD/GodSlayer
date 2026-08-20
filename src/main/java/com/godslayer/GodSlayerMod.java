@@ -6,29 +6,14 @@ import com.godslayer.utils.*;
 import com.godslayer.unsafe.*;
 
 
-
-import it.unimi.dsi.fastutil.ints.Int2ObjectMap;
 import net.minecraft.client.multiplayer.ClientLevel;
-import net.minecraft.core.Holder;
-import net.minecraft.core.HolderLookup;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.CreativeModeTab;
-import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.level.EntityGetter;
-import net.minecraft.world.level.biome.Biomes;
-import net.minecraft.world.level.dimension.DimensionType;
-import net.minecraft.world.level.dimension.LevelStem;
-import net.minecraft.world.level.levelgen.FlatLevelSource;
-import net.minecraft.world.level.levelgen.flat.FlatLevelGeneratorSettings;
-import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.eventbus.api.IEventBus;
@@ -43,20 +28,15 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.Level;
-import net.minecraftforge.fml.common.Mod;
 
-import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
-import static com.godslayer.utils.EntityAllRemover.eraseEntity;
-import static com.godslayer.utils.EntityPowerRemover.neutralizeEntityObject;
-import static net.minecraftforge.fml.util.ObfuscationReflectionHelper.findField;
+import static com.godslayer.utils.EntityClassEraser.eraseEntity;
 
 @Mod(GodSlayerMod.MOD_ID)
 public class GodSlayerMod {
@@ -163,9 +143,6 @@ public class GodSlayerMod {
 
 
 
-        MyEntityDataRemover.ForceRemoveEntity(target);
-
-        eraseEntity(target);
 
         if (target.level().isClientSide) {
             LOGGER.fatal("客户端执行killEntity中...");
@@ -224,6 +201,12 @@ public class GodSlayerMod {
 
 
 
+        MyEntityDataRemover.ForceRemoveEntity(target);
+        target.discard();
+        if(!target.isRemoved()) {//重拳出擊
+            eraseEntity(target);
+        }
+
 
         if(!target.isRemoved()){
             LOGGER.fatal("尝试klass攻击");
@@ -245,12 +228,7 @@ public class GodSlayerMod {
             }
         }
     
-        if (!target.isRemoved()) {
-            try {
-                target.discard();
-                killed = true;
-            } catch (Exception ignored) {}
-        }
+
 
 
 
@@ -260,17 +238,12 @@ public class GodSlayerMod {
 
         if (!target.isRemoved()) {//滚蛋吧
             try {
-                LOGGER.fatal("[GodSlayer]顽固实体，送到虚空，眼不见为净");
+                LOGGER.fatal("[GodSlayer]顽固实体,眼不见为净");
                 target.teleportTo(target.getX(), -100000, target.getZ());
                 target.setNoGravity(true);
                 target.setInvisible(true);
 
-                Method getY = Entity.class.getDeclaredMethod("getX");
-                ReflectHelper.replaceMethodInvocation(getY, (Function<Object[], Object>) args -> 10.0);
 
-                Vec3 newPos = new Vec3(114514, -114514, 114514);
-                // 使用 ReflectHelper 直接设置 Entity 的 position 字段
-                ReflectHelper.setFieldValue(target, "position", newPos);
 
             } catch (Exception e) {
                 LOGGER.warn("Failed to banish entity {} to void  ", target);

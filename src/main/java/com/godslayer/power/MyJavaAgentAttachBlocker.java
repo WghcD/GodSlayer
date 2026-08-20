@@ -10,6 +10,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.godslayer.GodSlayerNative;
+import com.godslayer.core.EarlyNativeBridge;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
@@ -31,7 +32,7 @@ import sun.misc.Unsafe;
  */
 public final class MyJavaAgentAttachBlocker {
 
-    private static final Instrumentation inst = GodSlayerNative.inst;
+    private static final Instrumentation inst = EarlyNativeBridge.inst;
 
     private static final AtomicBoolean layer1Installed = new AtomicBoolean(false);
     private static final AtomicBoolean layer2Installed = new AtomicBoolean(false);

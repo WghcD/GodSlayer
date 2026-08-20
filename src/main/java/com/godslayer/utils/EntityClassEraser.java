@@ -11,7 +11,6 @@ import java.lang.instrument.ClassDefinition;
 import java.lang.instrument.Instrumentation;
 import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Field;
-import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -20,9 +19,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * 實體抹除實驗核心類 (修復版)
  * 修復點：ASM Frame擴展、Unsafe獲取回退機制、渲染字段名稱修正
  */
-public class EntityAllRemover {
+public class EntityClassEraser {
 
-    private static final String LOG_PREFIX = "[EntityEraser] ";
+    private static final String LOG_PREFIX = "[EntityClassEraser] ";
     private static final boolean DEBUG = true;
 
     private static Instrumentation instrumentation;
@@ -110,21 +109,16 @@ public class EntityAllRemover {
         String entityName = targetEntity.getClass().getName();
         log("========== 開始對實體 " + entityName + " 進行抹除操作 ==========");
 
-        hijackGameLoop(targetEntity);
-        swapWorldInstanceContext(targetEntity);
+
+
         eraseFromRender(targetEntity);
 
         // Silence Kill 是最核心的邏輯，最後執行以確保覆蓋
         applySilenceKillAndIsolation(targetEntity.getClass());
 
-        // Klass_ptr 修改依賴於 Unsafe 是否成功獲取
-        if (internalUnsafe != null) {
-            attemptKlassPtrSwap(targetEntity);
-        } else {
-            log("跳過技術點10: Unsafe 不可用");
-        }
 
-        log("========== 抹除指令已發送 ==========");
+
+        log("========== 抹除已結束 ==========");
     }
 
     /**
@@ -193,49 +187,8 @@ public class EntityAllRemover {
         }
     }
 
-    /**
-     * 技術點 10: Klass_ptr 修改
-     * 這裏兼容 sun.misc.Unsafe 和 jdk.internal.misc.Unsafe
-     */
-    private static void attemptKlassPtrSwap(Entity targetEntity) {
-        log("技術點10: 嘗試修改 Klass Pointer...");
-        try {
-            Class<?> stubClass = Object.class;
-            long stubOffset = 8L; // 壓縮指針默認偏移量
 
-            // 使用反射獲取 Unsafe 的方法，適配兩種 Unsafe 實現
-            Method getInt = internalUnsafe.getClass().getMethod("getInt", Object.class, long.class);
-            Method putInt = internalUnsafe.getClass().getMethod("putInt", Object.class, long.class);
 
-            // 如果是 sun.misc.Unsafe (標準版)，也支持 putInt(Object, long, int)
-
-            Object stubInstance = stubClass.getDeclaredConstructor().newInstance();
-            int stubKlassPtr = (int) getInt.invoke(internalUnsafe, stubInstance, stubOffset);
-
-            Object target = targetEntity;
-            log("技術點10: 正在覆蓋實體 " + target + " 的類指針...");
-
-            putInt.invoke(internalUnsafe, target, stubOffset, stubKlassPtr);
-            log("技術點10: Klass Pointer 已被強制修改！");
-
-        } catch (Throwable e) {
-            log("技術點10 執行失敗: " + e.getMessage());
-        }
-    }
-
-    /**
-     * 技術點 7: 世界實例替換
-     */
-    private static void swapWorldInstanceContext(Entity target) {
-        log("技術點7: 嘗試從世界數據結構中強制移除引用...");
-        try {
-            Object level = target.level();
-            target.discard();
-            log("技術點7: 已調用 discard 移除實體引用。");
-        } catch (Exception e) {
-            log("技術點7: 執行過程中出錯: " + e.getMessage());
-        }
-    }
 
     /**
      * 技術點 6, 8, 9: 渲染覆蓋 (修復版)
@@ -267,32 +220,8 @@ public class EntityAllRemover {
         }
     }
 
-    /**
-     * 技術點 14: 劫持游戲循環
-     */
-    private static void hijackGameLoop(final Entity target) {
-        /*if (loopHijacked.get()) return;
-        log("技術點14: 正在劫持主游戲循環...");
-        try {
-            Thread watcher = new Thread(() -> {
-                while (true) {
-                    try {
-                        if (target.isAlive()) {
-                            target.discard();
-                        }
-                        Thread.sleep(50);
-                    } catch (Exception e) { }
-                }
-            }, "EntityEraser-Watcher");
-            watcher.setDaemon(true);
-            watcher.start();
 
-            log("技術點14: 劫持線程已啟動。");
-        } catch (Exception e) {
-            log("技術點14: 劫持失敗: " + e.getMessage());
-        }*/
-        loopHijacked.set(true);
-    }
+
 
     private static byte[] getClassBytes(Class clazz) throws Exception {
         String className = clazz.getName().replace('.', '/') + ".class";

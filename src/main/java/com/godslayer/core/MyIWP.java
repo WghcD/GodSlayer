@@ -15,13 +15,17 @@ public final class MyIWP implements ImmediateWindowProvider
 
     @Override
     public String name() {
-        return "GodSlayerIWP";
+        return "AAA";
     }
 
     @Override
     public Runnable initialize(String[] arguments) {
 
-        return null;
+        return () -> {
+
+            // 这里可以做窗口轮询等操作，注意不要阻塞
+            // 每帧调用一次，建议只做轻量操作
+        };
     }
 
     @Override

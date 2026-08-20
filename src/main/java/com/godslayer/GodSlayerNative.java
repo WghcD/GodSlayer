@@ -1,6 +1,6 @@
 package com.godslayer;
 
-import com.godslayer.power.MyUnsafeGettingBlocker;
+import com.godslayer.power.UnsafeGuard;
 import net.minecraft.world.level.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -18,7 +18,7 @@ import java.security.ProtectionDomain;
 import java.io.*;
 
 import static com.godslayer.power.MyJavaAgentAttachBlocker.*;
-import static com.godslayer.power.MyUnsafeGettingBlocker.disableAllUnsafeAccess;
+import static com.godslayer.power.UnsafeGuard.disableAllUnsafeAccess;
 
 
 public class GodSlayerNative {
@@ -46,7 +46,7 @@ public class GodSlayerNative {
 
         installAllProtections();
 
-        //disableAllUnsafeAccess();
+        disableAllUnsafeAccess();
 
     }
 
@@ -207,7 +207,7 @@ public class GodSlayerNative {
     public static native void nativeMassacre(Level level);
     public static native void nativeKillEntity(Level level, int entityId);
     private static native Object initializePower();
-
+    public static native void addTransformFilter(String internalClassName);
 
 }
 
