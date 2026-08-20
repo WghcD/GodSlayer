@@ -110,6 +110,7 @@ public class ProtectionEvents {
         }
 
         if(isHoldingNormalSword(attacker)){
+            System.out.println("NormalSword Using Event Called.");
             NativeGuard.AddBlockedEntity(target);
         }
     }

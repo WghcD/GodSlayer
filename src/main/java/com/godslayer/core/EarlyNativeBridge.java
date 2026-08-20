@@ -1,6 +1,7 @@
 package com.godslayer.core;
 
 
+import com.godslayer.power.InstrumentationFinder;
 import com.godslayer.power.InstrumentationInterceptor;
 import com.godslayer.power.MyJavaAgentAttachBlocker;
 import com.godslayer.power.TransformationServiceGuard;
@@ -12,6 +13,7 @@ import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 
 import static com.godslayer.GodSlayerNative.testFullInstrumentation;
+import static com.godslayer.power.InstrumentationFinder.searchNowAndPrintDetails;
 import static com.godslayer.power.UnsafeGuard.disableAllUnsafeAccess;
 
 public class EarlyNativeBridge{
@@ -111,14 +113,17 @@ public class EarlyNativeBridge{
         extractAndLoadNative("godslayerAntiDanger");
         extractAndLoadNative("godslayerPowerE");
 
+        searchNowAndPrintDetails();
+        inst= InstrumentationFinder.getInstrumentationResult();
+
+        if(inst instanceof Instrumentation){
+            System.out.println("\n\n\n\n\n!!!!!!Searching SSCC!!!!!.\n\n\n\n");
+        }
 
         Object obj = initializePower();
         if (obj instanceof Instrumentation) {
             System.out.println("\n\n\n\n\n[GodSlayer] Instrumentation object acquired successfully from native.\n\n\n\n");
             inst=(Instrumentation)obj;
-
-
-
         }
 
         MyJavaAgentAttachBlocker.installAllProtections();

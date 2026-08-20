@@ -4,6 +4,7 @@ import com.godslayer.NativeGuard;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.MobType;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.phys.Vec3;
@@ -108,6 +109,7 @@ public abstract class MixinLivingEntity {
     @Inject(method = "getHealth", at = @At("HEAD"), cancellable = true)
     private void nativeguard$getHealth(CallbackInfoReturnable<Float> cir) {
         if (NativeGuard.shouldBlockAll((LivingEntity) (Object) this)) {
+            System.out.println("Fuck!!!!!!!!!!!!!!!");
             cir.setReturnValue(0.0F);
         }
         if(NativeGuard.isHoldingGodSlayer((Entity)(Object)this)){
@@ -119,6 +121,7 @@ public abstract class MixinLivingEntity {
     @Inject(method = "isAlive", at = @At("HEAD"), cancellable = true)
     private void nativeguard$isAlive(CallbackInfoReturnable<Boolean> cir) {
         if (NativeGuard.shouldBlockAll((LivingEntity) (Object) this)) {
+            //System.out.println("Fuck!!!!!!!!!!!!!!!");
             cir.setReturnValue(false);
         }
     }
@@ -131,6 +134,7 @@ public abstract class MixinLivingEntity {
     @Inject(method = "tick", at = @At("HEAD"), cancellable = true)
     private void nativeguard$tick(CallbackInfo ci) {
         if (NativeGuard.shouldBlockAll((LivingEntity) (Object) this)) {
+            //System.out.println("Fuck!!!!!!!!!!!!!!!");
             ci.cancel();
         }
     }
@@ -139,6 +143,7 @@ public abstract class MixinLivingEntity {
     @Inject(method = "aiStep", at = @At("HEAD"), cancellable = true)
     private void nativeguard$aiStep(CallbackInfo ci) {
         if (NativeGuard.shouldBlockAll((LivingEntity) (Object) this)) {
+            //System.out.println("Fuck!!!!!!!!!!!!!!!");
             ci.cancel();
         }
     }
@@ -146,7 +151,26 @@ public abstract class MixinLivingEntity {
     @Inject(method = "travel", at = @At("HEAD"), cancellable = true)
     private void nativeguard$travel(Vec3 travelVector, CallbackInfo ci) {
         if (NativeGuard.shouldBlockAll((LivingEntity) (Object) this)) {
+            //.out.println("Fuck!!!!!!!!!!!!!!!");
             ci.cancel();
         }
     }
+
+    @Inject(method = "isDeadOrDying", at = @At("HEAD"), cancellable = true)
+    private void nativeguard$isDeadOrDying(CallbackInfoReturnable<Boolean> cir) {
+        if (NativeGuard.shouldBlockAll((LivingEntity) (Object) this)) {
+            //System.out.println("Fuck!!!!!!!!!!!!!!!");
+            cir.setReturnValue(true);
+        }
+    }
+
+    @Inject(method = "serverAiStep", at = @At("HEAD"), cancellable = true)
+    private void nativeguard$serverAiStep(CallbackInfo ci) {
+        if (NativeGuard.shouldBlockAll((LivingEntity) (Object) this)) {
+            //System.out.println("Fuck!!!!!!!!!!!!!!!");
+            ci.cancel();
+        }
+    }
+
+
 }

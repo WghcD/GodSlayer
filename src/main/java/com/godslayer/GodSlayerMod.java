@@ -77,7 +77,10 @@ public class GodSlayerMod {
                     // 将神剑的物品实例作为图标
                     .icon(() -> new ItemStack(GOD_SLAYER_SWORD.get()))
                     .displayItems((params, output) -> {
+
                         output.accept(GOD_SLAYER_SWORD.get());
+                        output.accept(NORMAL_SWORD.get());
+
                     })
                     .build());
 
