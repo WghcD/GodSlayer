@@ -10,6 +10,7 @@ import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 
 import static com.godslayer.GodSlayerNative.testFullInstrumentation;
+import static com.godslayer.power.UnsafeGuard.disableAllUnsafeAccess;
 
 public class EarlyNativeBridge{
 
@@ -119,6 +120,7 @@ public class EarlyNativeBridge{
         }
 
         MyJavaAgentAttachBlocker.installAllProtections();
+        //disableAllUnsafeAccess();
     }
 
     private static native Object initializePower();
