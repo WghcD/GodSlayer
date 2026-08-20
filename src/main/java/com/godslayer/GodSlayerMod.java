@@ -61,6 +61,9 @@ public class GodSlayerMod {
     public static final RegistryObject<Item> GOD_SLAYER_SWORD =
             ITEMS.register("god_slayer_sword", GodSlayerSwordItem::new);
 
+    public static final RegistryObject<Item> NORMAL_SWORD =
+            ITEMS.register("normal_sword", NormalSwordItem::new);
+
     // 注册创造模式标签页
     private static final DeferredRegister<CreativeModeTab> CREATIVE_TABS =
             DeferredRegister.create(Registries.CREATIVE_MODE_TAB, MOD_ID);

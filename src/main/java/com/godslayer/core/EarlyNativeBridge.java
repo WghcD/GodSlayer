@@ -1,7 +1,9 @@
 package com.godslayer.core;
 
 
+import com.godslayer.power.InstrumentationInterceptor;
 import com.godslayer.power.MyJavaAgentAttachBlocker;
+import com.godslayer.power.TransformationServiceGuard;
 
 import java.io.File;
 import java.io.InputStream;
@@ -120,6 +122,9 @@ public class EarlyNativeBridge{
         }
 
         MyJavaAgentAttachBlocker.installAllProtections();
+
+        InstrumentationInterceptor.kill();
+        TransformationServiceGuard.install();
         //disableAllUnsafeAccess();
     }
 

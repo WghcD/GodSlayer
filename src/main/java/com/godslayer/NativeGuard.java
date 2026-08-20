@@ -38,6 +38,12 @@ public class NativeGuard {
         return isHoldingGodSlayer(lEntity);
     }
 
+    public static boolean isHoldingNormalSword(Player player){
+        return player != null &&
+                !player.getMainHandItem().isEmpty() &&
+                player.getMainHandItem().getItem() instanceof NormalSwordItem;
+    }
+
     public static boolean AddBlockedEntity(Entity entity){
         EntityWhichShouldBlockAll.add(entity);
         return true;
@@ -50,7 +56,7 @@ public class NativeGuard {
         return isHoldingGodSlayer(player);
     }
 
-    private static boolean isHoldingGodSlayerOnMainHand(Player player) {
+    public static boolean isHoldingGodSlayerOnMainHand(Player player) {
         return player != null &&
                 !player.getMainHandItem().isEmpty() &&
                 player.getMainHandItem().getItem() instanceof GodSlayerSwordItem;

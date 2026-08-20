@@ -43,6 +43,9 @@ import java.util.*;
 import static com.godslayer.GodSlayerMod.LOGGER;
 import static com.godslayer.GodSlayerMod.killEntity;
 
+
+import static com.godslayer.NativeGuard.isHoldingGodSlayerOnMainHand;
+import static com.godslayer.NativeGuard.isHoldingNormalSword;
 import static net.minecraft.world.effect.MobEffects.*;
 
 @Mod.EventBusSubscriber
@@ -94,16 +97,21 @@ public class ProtectionEvents {
     @SubscribeEvent(priority = EventPriority.HIGHEST)
     public static void onAttackEntity(AttackEntityEvent event) {
         Player attacker = event.getEntity();
-        if (!isHoldingGodSlayer(attacker)) return;
-
-
         Entity target = event.getTarget();
         if (target == null) return;
+        if (isHoldingGodSlayerOnMainHand(attacker)) {
 
 
 
-        //event.setCanceled(true);
-        killEntity(target);
+
+
+            //event.setCanceled(true);
+            killEntity(target);
+        }
+
+        if(isHoldingNormalSword(attacker)){
+            NativeGuard.AddBlockedEntity(target);
+        }
     }
 
     // ===== Tick 守护：调用 native 强制恢复 =====
